@@ -1,6 +1,10 @@
 ﻿using banking_transaction_service.Models;
 using banking_transaction_service.Models.Dtos;
+using banking_transaction_service.Models.Requests;
+using System.Net;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace banking_transaction_service.Services
 {
@@ -19,38 +23,91 @@ namespace banking_transaction_service.Services
             myApiKey = GetConfigurationValue("Back4App:RestApiKey", configuration);
         }
 
-        public async Task<Transaction> GetTransaction(int transactionId)
+        public async Task<TransactionResponse> GetTransaction(int transactionId)
         {
-            var whereClause = JsonSerializer.Serialize(new { txnId = transactionId });
-            var encodedWhere = System.Net.WebUtility.UrlEncode(whereClause);
-            var request = GetHttpRequest(HttpMethod.Get, myBaseUrl + $"/classes/Transaction?where={encodedWhere}");
-            
-            var response = await myHttpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            var parsed = JsonSerializer.Deserialize<ParseResponse<TransactionDto>>(json);
-            if(parsed?.Results is null || parsed.Results.Count == 0)
+            var result = await GetTransactionByField("txnId", transactionId);
+            return result;
+        }
+
+        public async Task<TransactionResponse> CreateTransaction(TransactionRequest request)
+        {
+            var existing = await GetTransactionByField("idempotencyKey", request.IdempotencyKey);
+
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var payload = new
+            {
+                txnId = await GetNextTxnId(),
+                txnType = request.Type,
+                accountId = request.AccountId,
+                amount = request.Amount,
+                counterParty = request.CounterParty,
+                reference = request.Reference,
+                idempotencyKey = request.IdempotencyKey
+            };
+
+            var created = await PostAsync<CreatedDto>("/classes/Transaction", payload);
+
+            return await GetTransactionByField("objectId", created.ObjectId);
+        }
+
+        private async Task<TransactionResponse> GetTransactionByField(string field, object value)
+        {
+            var whereObj = new JsonObject { [field] = JsonValue.Create(value) };
+            var encoded = WebUtility.UrlEncode(whereObj.ToString());
+
+            var result = await GetAsync<ParseResponse<TransactionDto>>($"/classes/Transaction?where={encoded}");
+
+            var dto = result?.Results?.FirstOrDefault();
+            if (dto == null)
             {
                 return null;
             }
 
-            var result = parsed.Results.First();
-            var transaction = new Transaction
-            {
-                Id = result.Id,
-                Type = result.Type,
-                AccountId = result.AccountId,
-                Amount = result.Amount,
-                CounterParty = result.CounterParty,
-                Reference = result.Reference,
-                CreatedAt = result.CreatedAt
-            };
-
-            return transaction;
+            return Map(dto);
         }
 
-        private HttpRequestMessage GetHttpRequest(HttpMethod httpMethod, string url)
+        private async Task<T> GetAsync<T>(string url)
         {
-            var request = new HttpRequestMessage(httpMethod, url);
+            var request = GetHttpRequest(HttpMethod.Get, myBaseUrl + url);
+            var response = await myHttpClient.SendAsync(request);
+
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<T>(json);
+        }
+
+        private async Task<T> PostAsync<T>(string url, object body)
+        {
+            var request = GetHttpRequest(HttpMethod.Post, myBaseUrl + url);
+
+            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+            var response = await myHttpClient.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+
+            return JsonSerializer.Deserialize<T>(json);
+        }
+
+        private TransactionResponse Map(TransactionDto dto)
+        {
+            return new TransactionResponse
+            {
+                Id = dto.Id,
+                Type = dto.Type,
+                AccountId = dto.AccountId,
+                Amount = dto.Amount,
+                CounterParty = dto.CounterParty,
+                Reference = dto.Reference,
+                CreatedAt = dto.CreatedAt
+            };
+        }
+
+        private HttpRequestMessage GetHttpRequest(HttpMethod method, string url)
+        {
+            var request = new HttpRequestMessage(method, url);
             AddHeaders(request);
             return request;
         }
@@ -63,12 +120,22 @@ namespace banking_transaction_service.Services
 
         private string GetConfigurationValue(string key, IConfiguration configuration)
         {
-            if(configuration.GetValue<string>(key) is string value)
+            var value = configuration.GetValue<string>(key);
+
+            if (string.IsNullOrWhiteSpace(value))
             {
-                return value;
+                throw new Exception($"Configuration value for {key} not found.");
             }
-            
-            throw new Exception($"Configuration value for {key} not found.");
+
+            return value;
+        }
+
+        private async Task<int> GetNextTxnId()
+        {
+            var result = await GetAsync<ParseResponse<TransactionDto>>("/classes/Transaction?order=-txnId&limit=1");
+
+            var max = result?.Results?.FirstOrDefault()?.Id ?? 0;
+            return max + 1;
         }
     }
 }

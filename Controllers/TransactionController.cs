@@ -1,4 +1,5 @@
-﻿using banking_transaction_service.Services;
+﻿using banking_transaction_service.Models.Requests;
+using banking_transaction_service.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace banking_transaction_service.Controllers
@@ -24,6 +25,23 @@ namespace banking_transaction_service.Controllers
                 return NotFound("Transaction not found");
             }
 
+            return Ok(result);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateTransaction([FromBody] TransactionRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest("Request cannot be null");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+            {
+                return BadRequest("IdempotencyKey is required");
+            }
+
+            var result = await myService.CreateTransaction(request);
             return Ok(result);
         }
     }
