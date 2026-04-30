@@ -29,6 +29,12 @@ namespace banking_transaction_service.Services
             return result;
         }
 
+        public async Task<List<TransactionResponse>> GetTransactions(int accountId)
+        {
+            var result = await GetTransactionsByField("accountId", accountId);
+            return result;
+        }
+
         public async Task<TransactionResponse> CreateTransaction(CreateTransactionRequest request)
         {
             var existing = await GetTransactionByField("idempotencyKey", request.IdempotencyKey);
@@ -87,6 +93,22 @@ namespace banking_transaction_service.Services
             return Map(dto);
         }
 
+        private async Task<List<TransactionResponse>> GetTransactionsByField(string field, object value)
+        {
+            var whereObj = new JsonObject { [field] = JsonValue.Create(value) };
+            var encoded = WebUtility.UrlEncode(whereObj.ToString());
+
+            var result = await GetAsync<ParseResponse<TransactionDto>>($"/classes/Transaction?where={encoded}");
+
+            var dto = result?.Results;
+            if (dto == null)
+            {
+                return null;
+            }
+
+            return Map(dto);
+        }
+
         private async Task<string> GetObjectIdByField(string field, object value)
         {
             var whereObj = new JsonObject { [field] = JsonValue.Create(value) };
@@ -133,6 +155,27 @@ namespace banking_transaction_service.Services
                 Reference = dto.Reference,
                 CreatedAt = dto.CreatedAt
             };
+        }
+
+        private List<TransactionResponse> Map(List<TransactionDto> dtos)
+        {
+            var transactionResponses = new List<TransactionResponse>();
+            dtos.ForEach(dto =>
+            {
+                var transactionResponse = new TransactionResponse
+                {
+                    Id = dto.Id,
+                    Type = dto.Type,
+                    AccountId = dto.AccountId,
+                    Amount = dto.Amount,
+                    CounterParty = dto.CounterParty,
+                    Reference = dto.Reference,
+                    CreatedAt = dto.CreatedAt
+                };
+                transactionResponses.Add(transactionResponse);
+            });
+
+            return transactionResponses;
         }
 
         private HttpRequestMessage GetHttpRequest(HttpMethod method, string url)

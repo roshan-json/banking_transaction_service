@@ -16,9 +16,22 @@ namespace banking_transaction_service.Controllers
         }
 
         [HttpGet("{transactionId}")]
-        public async Task<IActionResult> GetTransactionsByAccountId(int transactionId)
+        public async Task<IActionResult> GetTransaction(int transactionId)
         {
             var result = await myService.GetTransaction(transactionId);
+
+            if (result is null)
+            {
+                return NotFound("Transaction not found");
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTransactions([FromQuery] int accountId)
+        {
+            var result = await myService.GetTransactions(accountId);
 
             if (result is null)
             {
