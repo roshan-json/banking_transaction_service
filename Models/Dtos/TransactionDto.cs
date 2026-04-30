@@ -4,6 +4,9 @@ namespace banking_transaction_service.Models.Dtos
 {
     public class TransactionDto
     {
+        [JsonPropertyName("objectId")]
+        public string ObjectId { get; set; }
+
         [JsonPropertyName("txnId")]
         public int Id { get; set; }
 

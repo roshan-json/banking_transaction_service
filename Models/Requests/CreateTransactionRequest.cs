@@ -1,6 +1,6 @@
 ﻿namespace banking_transaction_service.Models.Requests
 {
-    public class TransactionRequest
+    public class CreateTransactionRequest
     {
         public string Type { get; set; }
         public int AccountId { get; set; }

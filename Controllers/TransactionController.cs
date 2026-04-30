@@ -29,7 +29,7 @@ namespace banking_transaction_service.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTransaction([FromBody] TransactionRequest request)
+        public async Task<IActionResult> CreateTransaction([FromBody] CreateTransactionRequest request)
         {
             if (request == null)
             {
@@ -43,6 +43,24 @@ namespace banking_transaction_service.Controllers
 
             var result = await myService.CreateTransaction(request);
             return Ok(result);
+        }
+
+        [HttpPatch("{transactionId}")]
+        public async Task<IActionResult> UpdateTransaction(int transactionId, [FromBody] UpdateTransactionRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest("Request cannot be null");
+            }
+
+            var updated = await myService.UpdateTransaction(transactionId, request);
+
+            if (updated == null)
+            {
+                return NotFound($"Transaction with txnId {transactionId} not found");
+            }
+
+            return Ok(updated);
         }
     }
 }

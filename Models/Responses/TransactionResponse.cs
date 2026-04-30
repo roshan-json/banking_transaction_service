@@ -1,4 +1,6 @@
-﻿namespace banking_transaction_service.Models
+﻿using System.Text.Json.Serialization;
+
+namespace banking_transaction_service.Models
 {
     public class TransactionResponse
     {
@@ -9,6 +11,8 @@
         public string CounterParty { get; set; }
         public string Reference { get; set; }
         public DateTime CreatedAt { get; set; }
+
+        [JsonIgnore]
         public string IdempotencyKey { get; set; }
     }
 }
