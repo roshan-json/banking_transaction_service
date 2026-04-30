@@ -1,5 +1,5 @@
-﻿using System.Net.Http;
-using System.Text;
+﻿using banking_transaction_service.Models;
+using banking_transaction_service.Models.Dtos;
 using System.Text.Json;
 
 namespace banking_transaction_service.Services
@@ -14,9 +14,45 @@ namespace banking_transaction_service.Services
         public Back4AppService(HttpClient httpClient, IConfiguration configuration)
         {
             myHttpClient = httpClient;
-            myBaseUrl = configuration["Back4App:BaseUrl"];
-            myAppId = configuration["Back4App:AppId"];
-            myApiKey = configuration["Back4App:RestApiKey"];
+            myBaseUrl = GetConfigurationValue("Back4App:BaseUrl", configuration);
+            myAppId = GetConfigurationValue("Back4App:AppId", configuration);
+            myApiKey = GetConfigurationValue("Back4App:RestApiKey", configuration);
+        }
+
+        public async Task<Transaction> GetTransaction(int transactionId)
+        {
+            var whereClause = JsonSerializer.Serialize(new { txnId = transactionId });
+            var encodedWhere = System.Net.WebUtility.UrlEncode(whereClause);
+            var request = GetHttpRequest(HttpMethod.Get, myBaseUrl + $"/classes/Transaction?where={encodedWhere}");
+            
+            var response = await myHttpClient.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            var parsed = JsonSerializer.Deserialize<ParseResponse<TransactionDto>>(json);
+            if(parsed?.Results is null || parsed.Results.Count == 0)
+            {
+                return null;
+            }
+
+            var result = parsed.Results.First();
+            var transaction = new Transaction
+            {
+                Id = result.Id,
+                Type = result.Type,
+                AccountId = result.AccountId,
+                Amount = result.Amount,
+                CounterParty = result.CounterParty,
+                Reference = result.Reference,
+                CreatedAt = result.CreatedAt
+            };
+
+            return transaction;
+        }
+
+        private HttpRequestMessage GetHttpRequest(HttpMethod httpMethod, string url)
+        {
+            var request = new HttpRequestMessage(httpMethod, url);
+            AddHeaders(request);
+            return request;
         }
 
         private void AddHeaders(HttpRequestMessage request)
@@ -25,32 +61,14 @@ namespace banking_transaction_service.Services
             request.Headers.Add("X-Parse-REST-API-Key", myApiKey);
         }
 
-        public async Task<string> CreateTransaction(object data)
+        private string GetConfigurationValue(string key, IConfiguration configuration)
         {
-            var request = new HttpRequestMessage(HttpMethod.Post,
-                "https://parseapi.back4app.com/classes/transactions");
-
-            AddHeaders(request);
-
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(data),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            var response = await myHttpClient.SendAsync(request);
-            return await response.Content.ReadAsStringAsync();
-        }
-
-        public async Task<string> GetTransactionById(string objectId)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get,
-                $"{myBaseUrl}/classes/transactions/{objectId}");
-
-            AddHeaders(request);
-
-            var response = await myHttpClient.SendAsync(request);
-            return await response.Content.ReadAsStringAsync();
+            if(configuration.GetValue<string>(key) is string value)
+            {
+                return value;
+            }
+            
+            throw new Exception($"Configuration value for {key} not found.");
         }
     }
 }
