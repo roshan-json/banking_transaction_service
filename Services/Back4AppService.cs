@@ -2,6 +2,8 @@
 using banking_transaction_service.Models.Dtos;
 using banking_transaction_service.Models.Requests;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -27,6 +29,31 @@ namespace banking_transaction_service.Services
 
         public async Task<TransactionResponse> GetTransaction(int transactionId)
         {
+            // Step 1: Get the JWT token from the auth service
+            var tokenResponse = await myHttpClient.GetAsync("http://localhost:4000/token?role=SERVICE");
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                //return StatusCode(500, "Failed to obtain auth token");
+            }
+
+            var tokenData = await tokenResponse.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(tokenData);
+            var token = doc.RootElement.GetProperty("access_token").GetString();
+
+            // Step 2: Make the GET request with the token
+            var request = new HttpRequestMessage(HttpMethod.Get, $"http://localhost:4000/customers/1");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await myHttpClient.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseBody = await response.Content.ReadAsStringAsync();
+                //return Ok(responseBody);
+            }
+
+
+
             myLogger.LogInformation($"Fetching transaction with transactionId: {transactionId}");
             var result = await GetTransactionByField("txnId", transactionId);
             return result;
