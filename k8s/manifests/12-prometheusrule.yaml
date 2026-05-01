@@ -1,0 +1,90 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: banking-transaction-alerts
+  namespace: banking-transaction
+  labels:
+    app: banking-transaction-service
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: banking-transaction-service
+    interval: 30s
+    rules:
+    # RED Metrics Alerts
+    - alert: HighErrorRate
+      expr: |
+        (sum(rate(http_errors_total[5m])) by (path)) /
+        (sum(rate(http_requests_total[5m])) by (path)) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate > 5% for {{ $labels.path }}"
+
+    - alert: HighResponseLatency
+      expr: |
+        histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)) > 1.0
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "High response latency detected"
+        description: "P95 latency > 1s for {{ $labels.path }}"
+
+    - alert: ServiceDown
+      expr: up{job="banking-transaction-service"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        service: banking-transaction
+      annotations:
+        summary: "Banking transaction service is down"
+        description: "Service has been unreachable for 2 minutes"
+
+    # Business Metrics Alerts
+    - alert: HighFailedTransferRate
+      expr: |
+        rate(failed_transfers_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "Failed transfers detected"
+        description: "Failed transfers: {{ $value }} per second"
+
+    - alert: HighBalanceCheckLatency
+      expr: |
+        histogram_quantile(0.95, sum(rate(balance_check_latency_ms_bucket[5m])) by (le)) > 500
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "High balance check latency"
+        description: "P95 balance check latency > 500ms"
+
+    - alert: HighBack4AppLatency
+      expr: |
+        histogram_quantile(0.95, sum(rate(back4app_api_latency_ms_bucket[5m])) by (le, operation)) > 2000
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "High Back4App API latency"
+        description: "P95 latency for {{ $labels.operation }} > 2s"
+
+    - alert: Back4AppApiErrors
+      expr: rate(back4app_errors_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        service: banking-transaction
+      annotations:
+        summary: "Back4App API errors detected"
+        description: "Error code {{ $labels.error_code }} for {{ $labels.operation }}: {{ $value }} errors/sec"

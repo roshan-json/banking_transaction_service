@@ -45,6 +45,16 @@ kubectl apply -f $MANIFEST_DIR/08-hpa.yaml
 kubectl apply -f $MANIFEST_DIR/09-networkpolicy.yaml
 kubectl apply -f $MANIFEST_DIR/10-poddisruptionbudget.yaml
 
+# Optionally apply monitoring manifests
+read -p "Deploy ServiceMonitor and PrometheusRule? (y/n) [n]: " DEPLOY_MONITORING
+if [ "$DEPLOY_MONITORING" = "y" ]; then
+    echo "Deploying monitoring resources..."
+    kubectl apply -f $MANIFEST_DIR/11-servicemonitor.yaml 2>/dev/null || true
+    kubectl apply -f $MANIFEST_DIR/12-prometheusrule.yaml 2>/dev/null || true
+    kubectl apply -f $MANIFEST_DIR/13-grafana-dashboard.yaml 2>/dev/null || true
+    echo "Monitoring resources deployed (if Prometheus operator is installed)"
+fi
+
 echo ""
 echo "========================================="
 echo "Deployment complete!"
@@ -66,4 +76,8 @@ echo "  - Minikube IP: http://$(minikube ip):30080"
 echo ""
 echo "To check logs:"
 echo "  kubectl logs -f deployment/banking-transaction-service -n $NAMESPACE"
+echo ""
+echo "To access metrics:"
+echo "  kubectl port-forward svc/banking-transaction-service 8080:80 -n $NAMESPACE"
+echo "  Then: curl http://localhost:8080/metrics"
 echo ""

@@ -42,6 +42,16 @@ kubectl apply -f "$MANIFEST_DIR/08-hpa.yaml"
 kubectl apply -f "$MANIFEST_DIR/09-networkpolicy.yaml"
 kubectl apply -f "$MANIFEST_DIR/10-poddisruptionbudget.yaml"
 
+# Optionally apply monitoring manifests
+$deployMonitoring = Read-Host "Deploy ServiceMonitor and PrometheusRule? (y/n) [n]"
+if ($deployMonitoring -eq "y") {
+    Write-Host "Deploying monitoring resources..." -ForegroundColor Yellow
+    kubectl apply -f "$MANIFEST_DIR/11-servicemonitor.yaml" 2>$null
+    kubectl apply -f "$MANIFEST_DIR/12-prometheusrule.yaml" 2>$null
+    kubectl apply -f "$MANIFEST_DIR/13-grafana-dashboard.yaml" 2>$null
+    Write-Host "Monitoring resources deployed (if Prometheus operator is installed)" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "Deployment complete!" -ForegroundColor Green
@@ -63,4 +73,8 @@ Write-Host "  - Minikube IP: http://$(minikube ip):30080" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "To check logs:" -ForegroundColor Cyan
 Write-Host "  kubectl logs -f deployment/banking-transaction-service -n $NAMESPACE" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "To access metrics:" -ForegroundColor Cyan
+Write-Host "  kubectl port-forward svc/banking-transaction-service 8080:80 -n $NAMESPACE" -ForegroundColor Cyan
+Write-Host "  Then: curl http://localhost:8080/metrics" -ForegroundColor Cyan
 Write-Host ""
