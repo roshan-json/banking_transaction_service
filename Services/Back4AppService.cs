@@ -11,13 +11,15 @@ namespace banking_transaction_service.Services
     public class Back4AppService
     {
         private readonly HttpClient myHttpClient;
+        private readonly ILogger<Back4AppService> myLogger;
         private readonly string myBaseUrl;
         private readonly string myAppId;
         private readonly string myApiKey;
 
-        public Back4AppService(HttpClient httpClient, IConfiguration configuration)
+        public Back4AppService(HttpClient httpClient, ILogger<Back4AppService> logger, IConfiguration configuration)
         {
             myHttpClient = httpClient;
+            myLogger = logger;
             myBaseUrl = GetConfigurationValue("Back4App:BaseUrl", configuration);
             myAppId = GetConfigurationValue("Back4App:AppId", configuration);
             myApiKey = GetConfigurationValue("Back4App:RestApiKey", configuration);
@@ -25,22 +27,26 @@ namespace banking_transaction_service.Services
 
         public async Task<TransactionResponse> GetTransaction(int transactionId)
         {
+            myLogger.LogInformation($"Fetching transaction with transactionId: {transactionId}");
             var result = await GetTransactionByField("txnId", transactionId);
             return result;
         }
 
         public async Task<List<TransactionResponse>> GetTransactions(int accountId)
         {
+            myLogger.LogInformation($"Fetching transactions from accountId: {accountId}");
             var result = await GetTransactionsByField("accountId", accountId);
             return result;
         }
 
         public async Task<TransactionResponse> CreateTransaction(CreateTransactionRequest request)
         {
+            myLogger.LogInformation($"Creating a new transaction");
             var existing = await GetTransactionByField("idempotencyKey", request.IdempotencyKey);
 
             if (existing != null)
             {
+                myLogger.LogWarning($"Duplicate transaction was found with the same key");
                 return existing;
             }
 
@@ -66,6 +72,7 @@ namespace banking_transaction_service.Services
 
             if (existing == null)
             {
+                myLogger.LogWarning($"Transaction could not be found for update");
                 return null;
             }
 
