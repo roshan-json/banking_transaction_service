@@ -1,0 +1,17 @@
+**/.classpath
+**/.dockerignore
+**/.env
+**/.git
+**/.gitignore
+**/.project
+**/.settings
+**/.toolstartsettings
+**/.vs
+**/.vscode
+**/*.*proj.user
+**/.idea
+**/bin
+**/Dockerfile*
+**/docker-compose*
+**/logs
+**/obj

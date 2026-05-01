@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  banking-transaction-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banking-transaction-service
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - Back4App__BaseUrl=https://parseapi.back4app.com
+      - Back4App__AppId=7HAwhsEvSnIM4AqZbmEp30vd6GlA1XHAplXanDVb
+      - Back4App__RestApiKey=VXsAdwzxpLkdr1yEY9IcXqXDNKlBRNdA9PPBHAAj
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - banking-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+networks:
+  banking-network:
+    driver: bridge
+
+volumes:
+  logs:

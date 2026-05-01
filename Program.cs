@@ -61,6 +61,14 @@ app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
+// Health check endpoint for Docker
+app.MapGet("/health", () => 
+{
+    return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+})
+.WithName("HealthCheck")
+.WithDescription("Health check endpoint for container orchestration");
+
 app.MapControllers();
 
 app.Run();
