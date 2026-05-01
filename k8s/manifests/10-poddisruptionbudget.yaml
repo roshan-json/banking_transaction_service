@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: banking-transaction-pdb
+  namespace: banking-transaction
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: banking-transaction-service
