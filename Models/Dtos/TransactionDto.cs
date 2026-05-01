@@ -2,6 +2,9 @@
 
 namespace banking_transaction_service.Models.Dtos
 {
+    /// <summary>
+    /// DTO used to map Back4App transaction fields to the API response model.
+    /// </summary>
     public class TransactionDto
     {
         [JsonPropertyName("objectId")]
