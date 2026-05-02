@@ -12,14 +12,16 @@ namespace banking_transaction_service.Services
     {
         private readonly HttpClient myHttpClient;
         private readonly ILogger<Back4AppService> myLogger;
+        private readonly MetricsService myMetricsService;
         private readonly string myBaseUrl;
         private readonly string myAppId;
         private readonly string myApiKey;
 
-        public Back4AppService(HttpClient httpClient, ILogger<Back4AppService> logger, IConfiguration configuration)
+        public Back4AppService(HttpClient httpClient, ILogger<Back4AppService> logger, IConfiguration configuration, MetricsService metricsService)
         {
             myHttpClient = httpClient;
             myLogger = logger;
+            myMetricsService = metricsService;
             myBaseUrl = GetConfigurationValue("Back4App:BaseUrl", configuration);
             myAppId = GetConfigurationValue("Back4App:AppId", configuration);
             myApiKey = GetConfigurationValue("Back4App:RestApiKey", configuration);
@@ -35,35 +37,63 @@ namespace banking_transaction_service.Services
         public async Task<List<TransactionResponse>> GetTransactions(int accountId)
         {
             myLogger.LogInformation($"Fetching transactions from accountId: {accountId}");
-            var result = await GetTransactionsByField("accountId", accountId);
-            return result;
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var result = await GetTransactionsByField("accountId", accountId);
+                return result;
+            }
+            finally
+            {
+                stopwatch.Stop();
+                myMetricsService.RecordBalanceCheckLatency(accountId.ToString(), stopwatch.Elapsed.TotalMilliseconds);
+            }
         }
 
         public async Task<TransactionResponse> CreateTransaction(CreateTransactionRequest request)
         {
             myLogger.LogInformation($"Creating a new transaction");
-            var existing = await GetTransactionByField("idempotencyKey", request.IdempotencyKey);
+            myMetricsService.IncrementActiveTransactions(request.Type);
 
-            if (existing != null)
+            try
             {
-                myLogger.LogWarning($"Duplicate transaction was found with the same key");
-                return existing;
+                var existing = await GetTransactionByField("idempotencyKey", request.IdempotencyKey);
+
+                if (existing != null)
+                {
+                    myLogger.LogWarning($"Duplicate transaction was found with the same key");
+                    myMetricsService.RecordTransaction(request.Type, "duplicate");
+                    return existing;
+                }
+
+                var payload = new
+                {
+                    txnId = await GetNextTxnId(),
+                    txnType = request.Type,
+                    accountId = request.AccountId,
+                    amount = request.Amount,
+                    counterParty = request.CounterParty,
+                    reference = request.Reference,
+                    idempotencyKey = request.IdempotencyKey
+                };
+
+                var created = await PostAsync<CreatedDto>("/classes/Transaction", payload);
+                var result = await GetTransactionByField("objectId", created.ObjectId);
+
+                myMetricsService.RecordTransaction(request.Type, "success");
+                return result;
             }
-
-            var payload = new
+            catch (Exception ex)
             {
-                txnId = await GetNextTxnId(),
-                txnType = request.Type,
-                accountId = request.AccountId,
-                amount = request.Amount,
-                counterParty = request.CounterParty,
-                reference = request.Reference,
-                idempotencyKey = request.IdempotencyKey
-            };
-
-            var created = await PostAsync<CreatedDto>("/classes/Transaction", payload);
-
-            return await GetTransactionByField("objectId", created.ObjectId);
+                myLogger.LogError(ex, "Failed to create transaction");
+                myMetricsService.RecordTransaction(request.Type, "failed");
+                myMetricsService.RecordFailedTransfer(ex.GetType().Name);
+                throw;
+            }
+            finally
+            {
+                myMetricsService.DecrementActiveTransactions(request.Type);
+            }
         }
 
         public async Task<TransactionResponse> UpdateTransaction(int txnId, UpdateTransactionRequest request)
@@ -128,26 +158,70 @@ namespace banking_transaction_service.Services
 
         private async Task<T> GetAsync<T>(string url)
         {
-            var request = GetHttpRequest(HttpMethod.Get, myBaseUrl + url);
-            var response = await myHttpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var request = GetHttpRequest(HttpMethod.Get, myBaseUrl + url);
+                var response = await myHttpClient.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    myMetricsService.RecordBack4AppError("get", response.StatusCode.ToString());
+                }
+
+                return JsonSerializer.Deserialize<T>(json);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                myMetricsService.RecordBack4AppLatency("get", stopwatch.Elapsed.TotalMilliseconds);
+            }
         }
 
         private async Task<T> PostAsync<T>(string url, object body)
         {
-            var request = GetHttpRequest(HttpMethod.Post, myBaseUrl + url);
-            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            var response = await myHttpClient.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<T>(json);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var request = GetHttpRequest(HttpMethod.Post, myBaseUrl + url);
+                request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+                var response = await myHttpClient.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    myMetricsService.RecordBack4AppError("post", response.StatusCode.ToString());
+                }
+
+                return JsonSerializer.Deserialize<T>(json);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                myMetricsService.RecordBack4AppLatency("post", stopwatch.Elapsed.TotalMilliseconds);
+            }
         }
 
         private async Task PutAsync(string url, object body)
         {
-            var request = GetHttpRequest(HttpMethod.Put, myBaseUrl + url);
-            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            await myHttpClient.SendAsync(request);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var request = GetHttpRequest(HttpMethod.Put, myBaseUrl + url);
+                request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+                var response = await myHttpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    myMetricsService.RecordBack4AppError("put", response.StatusCode.ToString());
+                }
+            }
+            finally
+            {
+                stopwatch.Stop();
+                myMetricsService.RecordBack4AppLatency("put", stopwatch.Elapsed.TotalMilliseconds);
+            }
         }
 
         private TransactionResponse Map(TransactionDto dto)

@@ -1,6 +1,8 @@
+using banking_transaction_service.Middleware;
 using banking_transaction_service.Services;
 using banking_transaction_service.Swagger;
 using Microsoft.OpenApi.Models;
+using Prometheus;
 using Serilog;
 using System.Reflection;
 
@@ -19,6 +21,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<Back4AppService>();
+builder.Services.AddSingleton<MetricsService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -49,6 +52,10 @@ builder.Services.AddSwaggerGen(options =>
 builder.Host.UseSerilog();
 
 var app = builder.Build();
+
+// Add custom metrics middleware and expose Prometheus scrape endpoint
+app.UseMiddleware<MetricsMiddleware>();
+app.UseMetricServer("/metrics");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
