@@ -173,12 +173,22 @@ data:
           "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))",
-              "legendFormat": "{{ path }}",
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))",
+              "legendFormat": "P50 {{ path }}",
               "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))",
+              "legendFormat": "P90 {{ path }}",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))",
+              "legendFormat": "P99 {{ path }}",
+              "refId": "C"
             }
           ],
-          "title": "P95 Response Latency",
+          "title": "Response Latency Quantiles",
           "type": "timeseries"
         },
         {
@@ -493,6 +503,81 @@ data:
           ],
           "title": "Failed Transfers Rate",
           "type": "timeseries"
+        },
+        {
+          "datasource": "Tempo",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 24
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "expr": "service.name=\"banking-transaction-service\" AND operation.name=\"transfer\"",
+              "refId": "A"
+            }
+          ],
+          "title": "Transfer Workflow Trace",
+          "type": "trace"
         }
       ],
       "refresh": "10s",
